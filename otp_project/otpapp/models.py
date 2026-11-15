@@ -31,3 +31,12 @@ class OTPRecord(models.Model):
 
     def __str__(self):
         return f"{self.mobile} - {self.otp_code} - {self.status} - {self.stage}"
+
+class NSEBarred(models.Model):
+    nmobile = models.CharField(max_length=15, db_index=True)
+    barred = models.CharField(max_length=2)
+
+    class Meta:
+        pass
+    def __str__(self):
+        return f"{self.nmobile} - {self.barred}"

@@ -13,6 +13,19 @@ from .serializers import SendOTPSerializer, VerifyOTPSerializer
 from .services import send_otp_call, verify_otp
 
 
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
+from rest_framework.exceptions import ValidationError  # <-- Import this
+from rest_framework_simplejwt.tokens import RefreshToken
+
+from django.contrib.auth.models import User
+from .models import OTPRecord, UserProfile
+from .serializers import SendOTPSerializer, VerifyOTPSerializer
+from .services import send_otp_call, verify_otp
+
+
 class SendOTPView(APIView):
     permission_classes = [AllowAny]
 
@@ -22,7 +35,14 @@ class SendOTPView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         mobile = serializer.validated_data['mobile']
-        record = send_otp_call(mobile)
+        
+        # --- ADD TRY/EXCEPT HERE ---
+        try:
+            record = send_otp_call(mobile)
+        except ValidationError as e:
+            # This catches the NSEBarred error from services.py
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+        # ---------------------------
 
         return Response(
             {

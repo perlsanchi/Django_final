@@ -4,7 +4,18 @@ from django.conf import settings
 from django.utils import timezone
 import logging
 
-from .models import OTPRecord
+from .models import OTPRecord,NSEBarred
+
+logger = logging.getLogger(__name__)
+
+import random
+from datetime import timedelta
+from django.conf import settings
+from django.utils import timezone
+from rest_framework.exceptions import ValidationError  # <-- Import this
+import logging
+
+from .models import OTPRecord, NSEBarred
 
 logger = logging.getLogger(__name__)
 
@@ -14,22 +25,27 @@ def generate_otp(length=None):
 
 
 def send_otp_call(mobile):
+    # 1. Check if NSE Barred FIRST
+    if NSEBarred.objects.filter(nmobile=mobile, barred='A').exists():
+        # Raising ValidationError makes DRF return a 400 automatically
+        raise ValidationError({"mobile": ["Account is NSE barred."]})
+
     otp = generate_otp()
     expires_at = timezone.now() + timedelta(seconds=getattr(settings, 'OTP_EXPIRY_SECONDS', 300))
 
-    # 1. Find ONE existing active PREOTP record for this mobile (the latest one)
+    # 2. Find ONE existing active PREOTP record
     existing_record = OTPRecord.objects.filter(
         mobile=mobile, 
         stage='PREOTP', 
         status='Z'
-    ).order_by('-created_at').first()  # <--- .first() gets only ONE record
+    ).order_by('-created_at').first()
 
-    # 2. Mark only that ONE record as 'R' (Rejected)
+    # 3. Mark old one as 'R'
     if existing_record:
         existing_record.status = 'R'
         existing_record.save(update_fields=['status'])
 
-    # 3. Create the new record with stage 'PREOTP' and status 'Z'
+    # 4. Create the new record
     record = OTPRecord.objects.create(
         mobile=mobile,
         otp_code=otp,
@@ -38,9 +54,6 @@ def send_otp_call(mobile):
         status='Z'
     )
 
-    # ==========================================
-    # SIMULATED SMS (PRINTS TO TERMINAL)
-    # ==========================================
     print(f"\n📱 [SIMULATED SMS to {mobile}] Your OTP is: {otp}\n")
 
     return record
