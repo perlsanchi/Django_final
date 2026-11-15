@@ -17,18 +17,19 @@ def send_otp_call(mobile):
     otp = generate_otp()
     expires_at = timezone.now() + timedelta(seconds=getattr(settings, 'OTP_EXPIRY_SECONDS', 300))
 
-    # 1. Find existing active PREOTP records for this mobile
-    existing_records = OTPRecord.objects.filter(
+    # 1. Find ONE existing active PREOTP record for this mobile (the latest one)
+    existing_record = OTPRecord.objects.filter(
         mobile=mobile, 
         stage='PREOTP', 
         status='Z'
-    )
+    ).order_by('-created_at').first()  # <--- .first() gets only ONE record
 
-    # 2. Mark them as 'R' (Rejected/Replaced)
-    if existing_records.exists():
-        existing_records.update(status='R')
+    # 2. Mark only that ONE record as 'R' (Rejected)
+    if existing_record:
+        existing_record.status = 'R'
+        existing_record.save(update_fields=['status'])
 
-    # 3. Create a brand new record with stage 'PREOTP' and status 'Z'
+    # 3. Create the new record with stage 'PREOTP' and status 'Z'
     record = OTPRecord.objects.create(
         mobile=mobile,
         otp_code=otp,
